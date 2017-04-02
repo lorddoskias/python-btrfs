@@ -27,7 +27,7 @@ block_groups_by_transid = sorted(block_groups, key=lambda block_group: block_gro
 print("Using free space tree to examine free space fragmentation...", file=sys.stderr)
 
 for block_group in block_groups_by_transid:
-    if block_group.used_pct > 95:
+    if block_group.used_pct > 80:
         continue
     min_vaddr = block_group.vaddr
     max_vaddr = block_group.vaddr + block_group.length - 1
@@ -39,11 +39,8 @@ for block_group in block_groups_by_transid:
     score = 0
     if block_group.used != block_group.length:
         for free_space_extent in fs.free_space_extents(min_vaddr, max_vaddr):
-            bad = ((1 - abs((math.log2(free_space_extent.length) - shift) / half_width))
-                   * free_space_extent.length)
-            print("{} {}".format(free_space_extent.length, bad))
+            bad = 1 - abs((math.log2(free_space_extent.length) - shift) / half_width)
             score += bad
-        score = (score / (block_group.length - block_group.used)) * 100
     grid = heatmap.walk_extents(fs, [block_group], size=9, verbose=-1)
     png_filename = "png/{:06d}-{}-{}-{}.png".format(
         int(score),
