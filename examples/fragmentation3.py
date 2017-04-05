@@ -14,31 +14,20 @@ if len(sys.argv) < 3:
 min_score = int(sys.argv[1])
 fs = btrfs.FileSystem(sys.argv[2])
 
-block_groups = []
-print("Loading block group objects...", file=sys.stderr)
-for chunk in fs.chunks():#min_vaddr=37971835224064, max_vaddr=37971835224065):
+skipped_max_usage = skipped_min_fragmented = skipped_gone = 0
+
+for chunk in fs.chunks():
     if chunk.type != btrfs.BLOCK_GROUP_DATA:
         continue
     try:
-        block_groups.append(fs.block_group(chunk.vaddr, chunk.length))
+        block_group = fs.block_group(chunk.vaddr, chunk.length)
     except IndexError:
+        skipped_gone += 1
+        continue
+    if block_group.used_pct >= 80:
+        skipped_max_usage += 1
         continue
 
-print("Sorting block group objects by metadata page transid...", file=sys.stderr)
-block_groups_by_transid = sorted(block_groups, key=lambda block_group: block_group.transid)
-
-print("Using free space tree to examine free space fragmentation...", file=sys.stderr)
-
-for block_group in block_groups_by_transid:
-    try:
-        # retrieve information again, since balance can stuff data into
-        # other block groups, so numbers might have changed while we're
-        # processing the list we built initially
-        block_group = fs.block_group(block_group.vaddr, block_group.length)
-    except IndexError:
-        continue
-    if block_group.used_pct > 80:
-        continue
     min_vaddr = block_group.vaddr
     max_vaddr = block_group.vaddr + block_group.length - 1
 
@@ -61,6 +50,10 @@ for block_group in block_groups_by_transid:
                 bad = 1 - abs((math.log2(free_space_extent.length) - shift) / half_width)
                 score += bad
     if score >= min_score:
+        print("skipped max_usage {} min_fragmented {} gone {}".format(
+            skipped_max_usage, skipped_min_fragmented, skipped_gone))
+        skipped_max_usage = skipped_min_fragmented = skipped_gone = 0
+
         grid = heatmap.walk_extents(fs, [block_group], size=9, verbose=-1)
         png_filename = "png/{}-{:06d}-{}-{}-{}.png".format(
             int(time.time()),
@@ -70,3 +63,6 @@ for block_group in block_groups_by_transid:
         shutil.copy2(png_filename, '/srv/www/test/now.png')
         args = btrfs.ioctl.BalanceArgs(vstart=min_vaddr, vend=min_vaddr+1)
         print(btrfs.ioctl.balance_v2(fs.fd, data_args=args))
+    else:
+        skipped_min_fragmented += 1
+
