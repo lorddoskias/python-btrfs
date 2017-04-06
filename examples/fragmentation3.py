@@ -55,12 +55,11 @@ for chunk in fs.chunks():
         skipped_max_usage = skipped_min_fragmented = skipped_gone = 0
 
         grid = heatmap.walk_extents(fs, [block_group], size=9, verbose=-1)
-        png_filename = "png/{}-{:06d}-{}-{}-{}.png".format(
-            int(time.time()),
-            int(score), block_group.transid, block_group.used_pct, block_group.vaddr)
+        png_filename = "/srv/www/btrfs-fragmented/processed/{}-{:06d}-{}-{}.png".format(
+            int(time.time()), int(score), block_group.used_pct, block_group.vaddr)
         print(png_filename)
         grid.write_png(png_filename)
-        shutil.copy2(png_filename, '/srv/www/test/now.png')
+        shutil.copy2(png_filename, '/srv/www/btrfs-fragmented/now.png')
         args = btrfs.ioctl.BalanceArgs(vstart=min_vaddr, vend=min_vaddr+1)
         print(btrfs.ioctl.balance_v2(fs.fd, data_args=args))
     else:
