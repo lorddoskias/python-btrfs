@@ -34,7 +34,7 @@ def get_file_extents(inode):
     for header, data in btrfs.ioctl.search_v2(fd, tree, min_key, max_key):
         if header.type == btrfs.ctree.EXTENT_DATA_KEY:
             data_extent = btrfs.ctree.FileExtentItem(header, data)
-            if data_extent.type != btrfs.ctree.FILE_EXTENT_INLINE:
+            if data_extent.type != btrfs.ctree.FILE_EXTENT_INLINE and data_extent.disk_bytenr != 0: #skip holes
                 found_extents.append(data_extent)
 
     return found_extents
@@ -47,6 +47,7 @@ def file_csum(f, offset):
 
 def print_csums(extents):
 
+    csum_items = set()
     with open(args.filepath, "rb") as f:
         for extent in extents:
             extent_start = extent.disk_bytenr
@@ -63,9 +64,11 @@ def print_csums(extents):
                 checksum_end = checksum_start + (checksum_count * 4096)
 
                 if extent_start >= checksum_start and extent_end <= checksum_end and extent_csums > 0:
-                    print(
-                        "objectid={} offset={} item size={}".format(
-                            btrfs.ctree.key_objectid_str(header.objectid, header.type), header.offset, header.len))
+                    if checksum_start not in csum_items:
+                        print("objectid={} offset={} item size={}".format(
+                            btrfs.ctree.key_objectid_str(header.objectid, header.type),
+                            header.offset, header.len))
+                        csum_items.add(checksum_start)
                     # how far in this checksum item do we begin. First we find
                     # how many 4kb blocks in are we
                     checksum_offset = ((extent_start - checksum_start) // 4096)
